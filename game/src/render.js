@@ -96,8 +96,15 @@ function drawSky(ctx, palette, time) {
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, VIEW_W, 190);
 
-  // Sun, top right.
+  // Sun, top right — a warm golden halo so the sky reads bright and
+  // lantern-lit even in a small screenshot.
   ctx.save();
+  const halo = ctx.createRadialGradient(856, 62, 8, 856, 62, 110);
+  halo.addColorStop(0, 'rgba(255, 214, 90, 0.55)');
+  halo.addColorStop(0.5, 'rgba(255, 214, 90, 0.18)');
+  halo.addColorStop(1, 'rgba(255, 214, 90, 0)');
+  ctx.fillStyle = halo;
+  ctx.fillRect(856 - 110, 62 - 110, 220, 220);
   ctx.fillStyle = '#fff3b0';
   ctx.beginPath();
   ctx.arc(856, 62, 30, 0, Math.PI * 2);

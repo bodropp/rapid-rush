@@ -237,6 +237,8 @@ export function drawTitle(ctx, game) {
     ctx.textAlign = 'center';
     ctx.fillText(`BEST  ${game.best.toLocaleString('en-US')}`, VIEW_W / 2, 448);
   }
+  // Dark pill behind the start prompt so it reads over bright water.
+  panel(ctx, VIEW_W / 2 - 330, 458, 660, 40, 0.75);
   const blink = 0.65 + 0.35 * Math.sin(game.world.time * 4);
   ctx.save();
   ctx.globalAlpha = blink;
@@ -266,6 +268,12 @@ export function drawGameOver(ctx, game) {
 
 export function drawWin(ctx, game) {
   dim(ctx, 0.5);
+  // Golden glow behind the conquest headline.
+  const glow = ctx.createRadialGradient(VIEW_W / 2, 104, 10, VIEW_W / 2, 104, 300);
+  glow.addColorStop(0, 'rgba(255, 210, 63, 0.30)');
+  glow.addColorStop(1, 'rgba(255, 210, 63, 0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(VIEW_W / 2 - 300, 0, 600, 240);
   bigTitle(ctx, 'RIVER CONQUERED!', 96, 52, '#ffd23f');
   ctx.fillStyle = '#ffffff';
   ctx.font = 'bold 18px sans-serif';
@@ -282,6 +290,8 @@ function endPrompt(ctx, game, text) {
     ctx.textAlign = 'center';
     ctx.fillText('★ NEW BEST SCORE! ★', VIEW_W / 2, 424);
   }
+  // Dark pill behind the replay prompt so it reads over the scene.
+  panel(ctx, VIEW_W / 2 - 300, 436, 600, 38, 0.7);
   const blink = 0.65 + 0.35 * Math.sin(game.world.time * 4);
   ctx.save();
   ctx.globalAlpha = blink;
