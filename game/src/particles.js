@@ -51,6 +51,33 @@ export function debris(particles, x, y) {
   burst(particles, x, y, { count: 12, color: '#ffffff', speed: 150, size: 4, life: 0.6, gravity: 200 });
 }
 
+export function confetti(particles, x, y) {
+  const colors = ['#ffd23f', '#ef476f', '#4cc9f0', '#06d6a0', '#ffb703', '#ffffff'];
+  for (const color of colors) {
+    burst(particles, x, y, { count: 14, color, speed: 240, size: 5, life: 1.4, gravity: 160 });
+  }
+}
+
+// --- floating score text ----------------------------------------------------
+// Floaters are separate from particles: short text labels that rise and
+// fade above the action ("+150 ×3", "RING +200"). They carry no gameplay.
+
+export function createFloaters() {
+  return [];
+}
+
+export function addFloater(floaters, x, y, text, color) {
+  floaters.push({ x, y, text, color, life: 1.1, maxLife: 1.1 });
+}
+
+export function updateFloaters(floaters, dt) {
+  for (const floater of floaters) {
+    floater.y -= 42 * dt;
+    floater.life -= dt;
+  }
+  return floaters.filter((floater) => floater.life > 0);
+}
+
 export function updateParticles(particles, dt) {
   for (const p of particles) {
     p.vy += p.gravity * dt;

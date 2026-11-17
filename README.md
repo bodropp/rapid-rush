@@ -8,6 +8,8 @@ A bright river-rafting arcade game, built for the [make.fun "Make the best game"
 
 Steer a wooden raft down a scrolling river. Dodge rocks, drifting logs and whirlpools; collect coins, hearts, shields and stars. Three hull hearts, rising speed and denser hazards as the river runs from Calm Greenwater through Teal Rapids to Ember Gorge.
 
+Chain coins fast to build a COMBO up to ×8, steer through golden rings for +200, and ride all 1,500 m to the falls to conquer the river — the final stretch of the gorge runs denser and faster.
+
 ## Play
 
 Serve `game/` with any static server and open `game/index.html` in desktop Chrome, or run `node serve.ts`.

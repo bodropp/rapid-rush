@@ -5,7 +5,7 @@
 import {
   VIEW_W, VIEW_H, RIVER_CENTER_X, SECTIONS, BASE_SCROLL, SCROLL_RAMP_PER_METER,
   SCROLL_MAX, PADDLE_BOOST_SPEED, PX_PER_METER, SPAWN_EVERY, SPAWN_MIN,
-  POINTS_PER_SECTION,
+  POINTS_PER_SECTION, RING_EVERY, RING_RADIUS, FINAL_STRETCH_AT,
 } from './config.js';
 import { makeRng, range, pick } from './random.js';
 
@@ -19,9 +19,13 @@ export function createWorld(seed) {
     sectionIndex: 0,
     sectionBlend: 0, // 0..1 palette lerp into the next section
     sectionFlash: 0, // seconds the section banner stays up
+    finalFlash: 0, // seconds the final-stretch banner stays up
+    finalStretch: false, // true once the run passes FINAL_STRETCH_AT
     spawnTimer: 1.2,
+    ringTimer: 5.5, // first golden ring a few seconds in
     hazards: [],
     pickups: [],
+    rings: [], // golden rings to steer through
     leaves: [],
     bankRows: [], // decorations on the banks, one row per 46 px
     nextBankRow: 0,
@@ -74,8 +78,10 @@ export function updateWorld(world, raft, dt, onSection) {
   const section = currentSection(world);
 
   // Speed grows with distance and with the section, plus the paddle boost.
+  // The final stretch adds another kick on top.
   const ramp = Math.min(SCROLL_MAX - BASE_SCROLL, world.distance * SCROLL_RAMP_PER_METER);
   let speed = (BASE_SCROLL + ramp) * section.speedScale;
+  if (world.finalStretch) speed *= 1.12;
   if (raft.paddle > 0) speed += PADDLE_BOOST_SPEED;
   world.speed = speed;
 
@@ -96,10 +102,58 @@ export function updateWorld(world, raft, dt, onSection) {
   }
   world.sectionFlash = Math.max(0, world.sectionFlash - dt);
 
+  // The final stretch: the last leg of Ember Gorge runs denser and
+  // faster, and gets its own banner the first time the raft enters it.
+  if (!world.finalStretch && world.distance >= FINAL_STRETCH_AT) {
+    world.finalStretch = true;
+    world.finalFlash = 2.6;
+  }
+  world.finalFlash = Math.max(0, world.finalFlash - dt);
+
   spawnEntities(world, dt);
+  spawnRings(world, dt);
   updateLeaves(world, dt);
   updateBankRows(world, dy);
   return world;
+}
+
+// --- rings ------------------------------------------------------------------
+
+function spawnRings(world, dt) {
+  world.ringTimer -= dt;
+  if (world.ringTimer > 0) return;
+  const rng = world.rng;
+  world.ringTimer = RING_EVERY * range(rng, 0.85, 1.2);
+  world.rings.push({
+    x: riverX(world, rng, 70),
+    y: -70,
+    radius: RING_RADIUS,
+    spin: rng() * Math.PI * 2,
+  });
+}
+
+export function updateRings(world, dt) {
+  for (const ring of world.rings) {
+    ring.y += world.speed * dt;
+    ring.spin += dt * 2;
+  }
+  world.rings = world.rings.filter((ring) => ring.y < VIEW_H + 80);
+}
+
+// A ring counts when its centre crosses the raft's height and the raft is
+// inside the hoop. Returns the ring, or null.
+export function findRingHit(world, raft) {
+  for (const ring of world.rings) {
+    if (Math.abs(ring.y - raft.y) < 26 && Math.abs(ring.x - raft.x) < ring.radius) {
+      return ring;
+    }
+  }
+  return null;
+}
+
+export function removeRing(world, ring) {
+  const index = world.rings.indexOf(ring);
+  if (index !== -1) world.rings.splice(index, 1);
 }
 
 // --- spawning ---------------------------------------------------------------
@@ -123,9 +177,11 @@ function spawnEntities(world, dt) {
   world.spawnTimer -= dt;
   if (world.spawnTimer > 0) return;
   const section = currentSection(world);
+  // The final stretch spawns 30% denser on top of the section scale.
+  const stretchScale = world.finalStretch ? 1.3 : 1;
   const interval = Math.max(
     SPAWN_MIN,
-    (SPAWN_EVERY - world.distance * 0.00045) / section.spawnScale,
+    (SPAWN_EVERY - world.distance * 0.00045) / (section.spawnScale * stretchScale),
   );
   world.spawnTimer = interval * range(rng, 0.75, 1.25);
 

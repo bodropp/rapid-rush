@@ -159,6 +159,19 @@ export function playSection(audio) {
   tone(audio, { from: 1047, at: 0.1, dur: 0.2, vol: 0.14 });
 }
 
+export function playRing(audio) {
+  tone(audio, { from: 1319, dur: 0.1, vol: 0.18 });
+  tone(audio, { from: 1760, at: 0.08, dur: 0.22, vol: 0.18 });
+  tone(audio, { from: 2093, at: 0.16, dur: 0.26, vol: 0.12 });
+}
+
+export function playWin(audio) {
+  [523, 659, 784, 1047, 1319, 1568].forEach((freq, i) => {
+    tone(audio, { from: freq, at: i * 0.1, dur: 0.24, vol: 0.17 });
+  });
+  tone(audio, { type: 'triangle', from: 2093, at: 0.62, dur: 0.5, vol: 0.14 });
+}
+
 export function playGameOver(audio) {
   [392, 330, 262, 196].forEach((freq, i) => {
     tone(audio, { type: 'triangle', from: freq, at: i * 0.16, dur: 0.24, vol: 0.18 });

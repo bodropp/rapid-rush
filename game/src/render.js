@@ -81,8 +81,11 @@ export function drawScene(ctx, game) {
   drawBankDecorations(ctx, palette, world);
   drawPickups(ctx, world);
   drawHazards(ctx, world);
+  drawRings(ctx, world);
+  drawWake(ctx, game);
   drawRaft(ctx, game);
   drawParticles(ctx, particles);
+  drawFloaters(ctx, game.floaters);
   ctx.restore();
 }
 
@@ -195,6 +198,21 @@ function drawRiver(ctx, palette, world, half) {
     ctx.fill();
   }
   ctx.globalAlpha = 1;
+
+  // Sun glints: short white dashes drifting down the water.
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+  ctx.lineWidth = 2;
+  const glintOffset = world.scrolled % 130;
+  for (let row = 0; row < 4; row += 1) {
+    const y = 210 + row * 96 - glintOffset + (row % 2) * 65;
+    const yy = y < 194 ? y + 390 : y;
+    if (yy > VIEW_H) continue;
+    const gx = leftEdge + 40 + ((row * 173 + 60) % (rightEdge - leftEdge - 90));
+    ctx.beginPath();
+    ctx.moveTo(gx, yy);
+    ctx.lineTo(gx + 16, yy);
+    ctx.stroke();
+  }
 }
 
 function drawLeaves(ctx, world) {
@@ -265,6 +283,78 @@ function drawBankDecorations(ctx, palette, world) {
 }
 
 // --- entities ----------------------------------------------------------------
+
+function drawRings(ctx, world) {
+  for (const ring of world.rings) {
+    const pulse = 1 + Math.sin(ring.spin * 2) * 0.05;
+    ctx.save();
+    ctx.translate(ring.x, ring.y);
+    ctx.scale(pulse, pulse);
+    // Outer glow.
+    ctx.strokeStyle = 'rgba(255, 179, 0, 0.35)';
+    ctx.lineWidth = 10;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, ring.radius + 4, ring.radius * 0.82 + 4, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    // The golden hoop.
+    ctx.strokeStyle = '#ffb703';
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, ring.radius, ring.radius * 0.82, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.strokeStyle = '#fff3b0';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, ring.radius - 4, ring.radius * 0.82 - 4, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    // Sparkles on the hoop.
+    ctx.fillStyle = '#ffffff';
+    for (let i = 0; i < 3; i += 1) {
+      const a = ring.spin + (i * Math.PI * 2) / 3;
+      ctx.beginPath();
+      ctx.arc(Math.cos(a) * ring.radius, Math.sin(a) * ring.radius * 0.82, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+}
+
+function drawWake(ctx, game) {
+  // A foam V trailing behind the raft, widening with speed.
+  const { raft, world } = game;
+  const speedK = Math.min(1, world.speed / 330);
+  ctx.save();
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.55)';
+  ctx.lineWidth = 3;
+  for (let i = 0; i < 3; i += 1) {
+    const spread = 14 + i * 10 + speedK * 10;
+    const y0 = raft.y + 16 + i * 12;
+    ctx.globalAlpha = 0.55 - i * 0.16;
+    ctx.beginPath();
+    ctx.moveTo(raft.x - 10, raft.y + 10);
+    ctx.lineTo(raft.x - spread, y0);
+    ctx.moveTo(raft.x + 10, raft.y + 10);
+    ctx.lineTo(raft.x + spread, y0);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawFloaters(ctx, floaters) {
+  if (!floaters) return;
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  for (const floater of floaters) {
+    ctx.globalAlpha = Math.max(0, floater.life / floater.maxLife);
+    ctx.font = 'bold 17px sans-serif';
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
+    ctx.shadowBlur = 4;
+    ctx.fillStyle = floater.color;
+    ctx.fillText(floater.text, floater.x, floater.y);
+  }
+  ctx.restore();
+}
 
 function drawPickups(ctx, world) {
   for (const pickup of world.pickups) {
@@ -454,6 +544,32 @@ function drawRaft(ctx, game) {
   ctx.fill();
   roundRect(ctx, 15, -24, 9, 48, 3);
   ctx.fill();
+  // Cargo: a little barrel and a coiled rope lashed to the deck.
+  ctx.fillStyle = '#7a4a21';
+  ctx.beginPath();
+  ctx.arc(16, 8, 10, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#9c6b34';
+  ctx.beginPath();
+  ctx.arc(16, 8, 8, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#5d3413';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.arc(16, 8, 8, 0, Math.PI * 2);
+  ctx.moveTo(8, 5);
+  ctx.lineTo(24, 5);
+  ctx.moveTo(8, 11);
+  ctx.lineTo(24, 11);
+  ctx.stroke();
+  ctx.strokeStyle = '#d9c08a';
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.arc(-14, 10, 7, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(-14, 10, 3.5, 0, Math.PI * 2);
+  ctx.stroke();
   // Flag on a pole at the back.
   ctx.strokeStyle = '#6f4525';
   ctx.lineWidth = 3;

@@ -33,6 +33,23 @@ export const PX_PER_METER = 12;
 export const POINTS_PER_METER = 1;
 export const POINTS_PER_COIN = 50;
 export const POINTS_PER_SECTION = 250;
+export const RING_POINTS = 200;
+export const CONQUEST_BONUS = 500;
+
+// Combo: chain coin pickups within COMBO_WINDOW seconds and each coin
+// pays POINTS_PER_COIN times the combo level (capped at COMBO_MAX).
+// A crash resets the chain to zero.
+export const COMBO_WINDOW = 2.5;
+export const COMBO_MAX = 8;
+
+// The goal: reach WIN_DISTANCE metres and the river is conquered.
+// The last FINAL_STRETCH_AT metres of Ember Gorge run denser and faster.
+export const WIN_DISTANCE = 1500;
+export const FINAL_STRETCH_AT = 1200;
+
+// Golden rings: one roughly every RING_EVERY seconds of play.
+export const RING_EVERY = 8;
+export const RING_RADIUS = 34;
 
 // Spawning: a new hazard or pickup every SPAWN_EVERY seconds at the start,
 // shrinking toward SPAWN_MIN as distance grows.

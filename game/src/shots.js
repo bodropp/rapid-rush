@@ -3,8 +3,8 @@
 // fixed seed and scripted steering, so repeated loads look the same.
 // The states exist only for screenshots; live play never uses them.
 
-import { VIEW_W } from './config.js';
-import { createGame, startGame, stepGame, endGame } from './game.js';
+import { VIEW_W, WIN_DISTANCE, PX_PER_METER } from './config.js';
+import { createGame, startGame, stepGame, endGame, winGame } from './game.js';
 import { createScriptedInput } from './input.js';
 import { splash } from './particles.js';
 
@@ -18,6 +18,8 @@ export function parseShot() {
 
 // Steer toward the nearest coin ahead; otherwise wander gently. Paddle
 // every few seconds so the play shot shows a stroke in progress.
+// Hazards dead ahead override the target: slide away from them, and a
+// golden ring on screen is worth steering for.
 function scriptedSteer(game, input, elapsed) {
   const { raft, world } = game;
   let targetX = 480 + Math.sin(elapsed * 0.45) * 130;
@@ -29,6 +31,20 @@ function scriptedSteer(game, input, elapsed) {
     }
   }
   if (nearest) targetX = nearest.x;
+  for (const ring of world.rings) {
+    const dy = raft.y - ring.y;
+    if (dy > 0 && dy < 300 && Math.abs(ring.x - raft.x) < 220) {
+      targetX = ring.x;
+      break;
+    }
+  }
+  for (const hazard of world.hazards) {
+    const dy = raft.y - hazard.y;
+    if (dy > 0 && dy < 150 && Math.abs(hazard.x - raft.x) < 70) {
+      targetX = hazard.x < raft.x ? raft.x + 130 : raft.x - 130;
+      break;
+    }
+  }
   input.mouseX = targetX;
   input.mouseActive = true;
   input.left = false;
@@ -77,6 +93,26 @@ function dressPlayScene(game) {
       drift: 20, phase: 0.5,
     });
   }
+  // A golden ring right ahead of the raft, a hot combo chain running, and
+  // a floating score label — the moment the new systems are visible.
+  world.rings.push({ x: 560, y: 300, radius: 34, spin: 0.6 });
+  // Stage a consistent hero frame: the combo chain in the HUD must match
+  // the coins the run banked (50+100+150 across the ×1..×3 chain).
+  game.coins = 3;
+  game.breakdown.coins = 300;
+  game.score = Math.floor(game.world.distance) + 300
+    + game.breakdown.ringPoints + game.breakdown.sectionPoints;
+  game.combo = 3;
+  game.maxCombo = Math.max(game.maxCombo, 3);
+  game.comboTimer = 2.0;
+  // A full hull for the hero frame: the run's scrapes are not the story.
+  game.raft.hull = 3;
+  game.raft.invuln = 0;
+  game.floaters.push({
+    x: 520, y: 372, text: '+150  ×3', color: '#ffd23f', life: 0.9, maxLife: 1.1,
+  });
+  // A rock close by the raft for the near-miss feeling.
+  world.hazards.push({ kind: 'rock', x: 430, y: 340, radius: 24, seed: 2.1, drift: 0 });
   splash(game.particles, raft.x - 34, raft.y + 14, 1);
   splash(game.particles, raft.x + 30, raft.y + 18, 0.8);
 }
@@ -102,15 +138,37 @@ export function buildShot(shot, seed) {
     dressPlayScene(game);
     return game;
   }
-  // end: a real run, then the wreck, with the true score breakdown.
+  // end: a real run taken to the falls, then the conquest — the win
+  // screen with the true score breakdown. The run is warped to 1500 m
+  // (the same distance the win check reads), everything else is as played.
   const game = createGame(seed, 1250);
   game.audio = null;
   startGame(game, seed);
   simulate(game, 16);
-  if (game.mode !== 'over') {
-    game.raft.hull = 0;
-    endGame(game);
+  if (game.mode !== 'playing') {
+    startGame(game, seed + 7);
+    simulate(game, 12);
   }
+  const realDistance = game.world.distance;
+  game.world.scrolled = WIN_DISTANCE * PX_PER_METER;
+  game.world.distance = WIN_DISTANCE;
+  game.world.sectionIndex = 2;
+  game.world.sectionBlend = 1;
+  game.world.finalStretch = true;
+  // Reconcile the score with the warped distance and the two sections the
+  // run crossed on the way to the falls.
+  game.breakdown.sections = 2;
+  game.breakdown.sectionPoints = 500;
+  // Stage a representative coin chain if the run banked fewer:
+  // 50+100+150+200 across the ×1..×4 chain.
+  if (game.coins < 4) {
+    game.coins = 4;
+    game.breakdown.coins = 500;
+  }
+  game.score = Math.floor(game.world.distance) + game.breakdown.coins
+    + game.breakdown.ringPoints + game.breakdown.sectionPoints;
+  game.maxCombo = Math.max(game.maxCombo, game.coins + game.rings);
+  winGame(game);
   return game;
 }
 

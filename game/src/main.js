@@ -7,7 +7,7 @@ import { createGame, startGame, stepGame } from './game.js';
 import { createInput } from './input.js';
 import { createAudio, playClick } from './audio.js';
 import { drawScene } from './render.js';
-import { drawHud, drawTitle, drawPaused, drawGameOver } from './hud.js';
+import { drawHud, drawTitle, drawPaused, drawGameOver, drawWin } from './hud.js';
 import { parseShot, buildShot } from './shots.js';
 
 const canvas = document.getElementById('game');
@@ -41,6 +41,7 @@ function render() {
   if (game.mode === 'title') drawTitle(ctx, game);
   if (game.mode === 'paused') drawPaused(ctx);
   if (game.mode === 'over') drawGameOver(ctx, game);
+  if (game.mode === 'won') drawWin(ctx, game);
 }
 
 function beginPlay() {
@@ -68,7 +69,7 @@ function frame(now) {
     game.world.time += dt;
     game.world.scrolled += 40 * dt;
     if (input.startPressed || input.anyPressed) beginPlay();
-  } else if (game.mode === 'over') {
+  } else if (game.mode === 'over' || game.mode === 'won') {
     if (input.restartPressed || input.anyPressed) beginPlay();
   }
 

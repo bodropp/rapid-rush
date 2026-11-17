@@ -5,18 +5,20 @@
 
 import {
   HULL_MAX, POINTS_PER_METER, POINTS_PER_COIN, POINTS_PER_SECTION,
-  PX_PER_METER, STAR_TIME, BEST_KEY,
+  PX_PER_METER, STAR_TIME, BEST_KEY, COMBO_WINDOW, COMBO_MAX,
+  RING_POINTS, WIN_DISTANCE, CONQUEST_BONUS,
 } from './config.js';
-import { createWorld, updateWorld, currentSection, riverHalfWidth, sectionBonus } from './world.js';
+import { createWorld, updateWorld, currentSection, riverHalfWidth, sectionBonus, updateRings, findRingHit, removeRing } from './world.js';
 import { createRaft, updateRaft, hitRaft, giveStar, giveShield, healRaft } from './raft.js';
 import { updateHazards, findHazardHit, removeHazard } from './hazards.js';
 import { updatePickups, findPickupHit, removePickup } from './pickups.js';
 import {
-  createParticles, updateParticles, splash, sparkle, debris,
+  createParticles, updateParticles, splash, sparkle, debris, confetti,
+  createFloaters, updateFloaters, addFloater,
 } from './particles.js';
 import {
   playCoin, playHeart, playShield, playStar, playCrash, playSection,
-  playGameOver, playNewBest, playPaddle,
+  playGameOver, playNewBest, playPaddle, playRing, playWin,
 } from './audio.js';
 
 export function loadBest() {
@@ -43,9 +45,14 @@ export function createGame(seed, best) {
     world,
     raft: createRaft(),
     particles: createParticles(world.rng),
+    floaters: createFloaters(),
     score: 0,
     coins: 0,
-    breakdown: { distance: 0, coins: 0, sections: 0, sectionPoints: 0 },
+    rings: 0,
+    combo: 0, // current chain of coin pickups
+    comboTimer: 0, // seconds left before the chain expires
+    maxCombo: 0, // best chain of this run
+    breakdown: { distance: 0, coins: 0, sections: 0, sectionPoints: 0, rings: 0, ringPoints: 0, conquest: 0 },
     starBonusMeters: 0,
     shake: 0,
     best: best ?? loadBest(),
@@ -79,7 +86,21 @@ export function stepGame(game, input, dt) {
   updateRaft(raft, input, dt, riverHalfWidth(world), game.audio, playPaddle);
   updateHazards(world, raft, dt);
   updatePickups(world, raft, dt);
+  updateRings(world, dt);
   game.particles = updateParticles(game.particles, dt);
+  game.floaters = updateFloaters(game.floaters, dt);
+
+  // The combo chain ticks down; when it lapses the multiplier is lost.
+  if (game.comboTimer > 0) {
+    game.comboTimer -= dt;
+    if (game.comboTimer <= 0) game.combo = 0;
+  }
+
+  // The river is conquered: 1500 m and the run ends in triumph.
+  if (world.distance >= WIN_DISTANCE && game.mode === 'playing') {
+    winGame(game);
+    return;
+  }
 
   // Paddle splashes trail the raft while a stroke runs.
   if (raft.paddle > 0 && world.rng() < dt * 22) {
@@ -98,8 +119,12 @@ export function stepGame(game, input, dt) {
   if (hazard) {
     const result = hitRaft(raft);
     if (result === 'hit' || result === 'sunk') {
-      game.shake = 1;
+      game.shake = result === 'sunk' ? 1.6 : 1;
+      // A crash breaks the combo chain.
+      game.combo = 0;
+      game.comboTimer = 0;
       debris(game.particles, raft.x, raft.y);
+      addFloater(game.floaters, raft.x, raft.y - 44, 'HULL -1', '#ef476f');
       if (game.audio) playCrash(game.audio);
       if (hazard.kind === 'whirlpool') removeHazard(world, hazard);
       if (result === 'sunk') endGame(game);
@@ -110,29 +135,60 @@ export function stepGame(game, input, dt) {
     }
   }
 
+  // A golden ring: steer through the hoop for a flat bonus and a combo
+  // bump — the chain timer refreshes, so rings keep a run alive.
+  if (game.mode !== 'playing') return;
+  const ring = findRingHit(world, raft);
+  if (ring) {
+    removeRing(world, ring);
+    game.rings += 1;
+    game.score += RING_POINTS;
+    game.breakdown.rings += 1;
+    game.breakdown.ringPoints += RING_POINTS;
+    game.combo = Math.min(COMBO_MAX, game.combo + 1);
+    game.comboTimer = COMBO_WINDOW;
+    game.maxCombo = Math.max(game.maxCombo, game.combo);
+    sparkle(game.particles, ring.x, ring.y, '#ffb703');
+    sparkle(game.particles, ring.x, ring.y, '#fff3b0');
+    addFloater(game.floaters, ring.x, ring.y - 30, `RING +${RING_POINTS}`, '#ffb703');
+    if (game.audio) playRing(game.audio);
+  }
+
   // Pickups.
   const pickup = findPickupHit(world, raft);
   if (pickup) {
     removePickup(world, pickup);
     const doubled = raft.star > 0;
     if (pickup.kind === 'coin') {
-      const points = POINTS_PER_COIN * (doubled ? 2 : 1);
+      // Chain the combo: each coin within the window raises the
+      // multiplier, so a bold line of coins pays far more than one coin.
+      game.combo = Math.min(COMBO_MAX, game.combo + 1);
+      game.comboTimer = COMBO_WINDOW;
+      game.maxCombo = Math.max(game.maxCombo, game.combo);
+      const points = POINTS_PER_COIN * game.combo * (doubled ? 2 : 1);
       game.coins += 1;
       game.score += points;
       game.breakdown.coins += points;
       sparkle(game.particles, pickup.x, pickup.y, '#ffd23f');
+      addFloater(
+        game.floaters, pickup.x, pickup.y - 24,
+        game.combo > 1 ? `+${points}  ×${game.combo}` : `+${points}`, '#ffd23f',
+      );
       if (game.audio) playCoin(game.audio, doubled);
     } else if (pickup.kind === 'heart') {
       healRaft(raft);
       sparkle(game.particles, pickup.x, pickup.y, '#ef476f');
+      addFloater(game.floaters, pickup.x, pickup.y - 24, '+1 HULL', '#ef476f');
       if (game.audio) playHeart(game.audio);
     } else if (pickup.kind === 'shield') {
       giveShield(raft);
       sparkle(game.particles, pickup.x, pickup.y, '#4cc9f0');
+      addFloater(game.floaters, pickup.x, pickup.y - 24, 'SHIELD!', '#4cc9f0');
       if (game.audio) playShield(game.audio);
     } else if (pickup.kind === 'star') {
       giveStar(raft);
       sparkle(game.particles, pickup.x, pickup.y, '#ffb703');
+      addFloater(game.floaters, pickup.x, pickup.y - 24, 'DOUBLE POINTS!', '#ffb703');
       if (game.audio) playStar(game.audio);
     }
   }
@@ -153,6 +209,24 @@ export function endGame(game) {
     if (game.audio) playNewBest(game.audio);
   }
   if (game.audio) playGameOver(game.audio);
+}
+
+// The river is conquered: 1500 m down, the falls are beaten. Same
+// breakdown as a wreck, plus the conquest bonus and a confetti storm.
+export function winGame(game) {
+  game.mode = 'won';
+  game.breakdown.distance = Math.floor(game.world.distance + game.starBonusMeters);
+  game.breakdown.conquest = CONQUEST_BONUS;
+  game.score += CONQUEST_BONUS;
+  const finalScore = Math.floor(game.score);
+  if (finalScore > game.best) {
+    game.best = finalScore;
+    game.newBest = true;
+    saveBest(game.best);
+    if (game.audio) playNewBest(game.audio);
+  }
+  confetti(game.particles, game.raft.x, game.raft.y - 60);
+  if (game.audio) playWin(game.audio);
 }
 
 export function sectionName(game) {
